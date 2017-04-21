@@ -1,73 +1,51 @@
 package edu.nyu.cs9053.homework8;
 
 import java.time.LocalTime;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Created by Kanishk on 4/3/17.
  */
-public class LambdaWeightedScheduler implements Iterable<LambdaWeightedScheduler>{
+public class LambdaWeightedScheduler extends LambdaScheduler<WeightedJob>{
 
-    private static final List<LambdaWeightedScheduler> INPUT_JOBS = new LinkedList<>();
-    private static final List<LambdaWeightedScheduler> SELECTED_JOBS = new LinkedList<>();
-    private static double dynamicProfit[];
-    private static int previousCompatibleJob[];
+    private double dynamicProfit[];
+    private int previousCompatibleJob[];
 
-    private final LocalTime startTime;
-    private final LocalTime endTime;
-    private final double weight;
-
-    private LambdaWeightedScheduler(String startTime, String endTime, double weight){
-        this.startTime = LocalTime.parse(startTime);
-        this.endTime = LocalTime.parse(endTime);
-        this.weight = weight;
+    public LambdaWeightedScheduler(){
     }
 
-    public LocalTime getStartTime(){
-        return startTime;
+    public LambdaWeightedScheduler(List<WeightedJob> weightedJobs){
+        super(weightedJobs);
     }
 
-    public LocalTime getEndTime(){
-        return endTime;
-    }
-
-    public double getWeight() {
-        return weight;
-    }
-
-    //add jobs to the scheduler
-    public static void add(String startTime, String endTime, double weight) {
-        INPUT_JOBS.add(new LambdaWeightedScheduler(startTime, endTime, weight));
-    }
 
     //schedule the jobs once all the tasks are added to maximize profit
-    public static void optimize() {
-        if (INPUT_JOBS.size() == 0) {
+    @Override
+    public void optimize() {
+        if (getInputJobs().size() == 0) {
             throw new IllegalStateException("No jobs to schedule");
         }
-        INPUT_JOBS.sort(Comparator.comparing(LambdaWeightedScheduler::getEndTime));
-        dynamicProfit = new double[INPUT_JOBS.size()];
-        dynamicProfit[0] = INPUT_JOBS.get(0).getWeight();
-        previousCompatibleJob = new int[INPUT_JOBS.size()];
-        for (int i = 1; i < INPUT_JOBS.size(); i++) {
-            dynamicProfit[i] = Math.max(INPUT_JOBS.get(i).getWeight(), dynamicProfit[i - 1]);
+        getInputJobs().sort(Comparator.comparing(Job::getEndTime));
+        dynamicProfit = new double[getInputJobs().size()];
+        dynamicProfit[0] = getInputJobs().get(0).getWeight();
+        previousCompatibleJob = new int[getInputJobs().size()];
+        for (int i = 1; i < getInputJobs().size(); i++) {
+            dynamicProfit[i] = Math.max(getInputJobs().get(i).getWeight(), dynamicProfit[i - 1]);
             for (int j = i - 1; j >= 0; j--) {
-                if (isCompatible (INPUT_JOBS.get(i), INPUT_JOBS.get(j))) {
+                if (getInputJobs().get(i).isCompatibleTo(getInputJobs().get(j))) {
                     //if(jobs[j].end <= jobs[i].start){
                     previousCompatibleJob[i] = j;
-                    dynamicProfit[i] = Math.max(dynamicProfit[i], INPUT_JOBS.get(i).getWeight() + dynamicProfit[j]);
+                    dynamicProfit[i] = Math.max(dynamicProfit[i], getInputJobs().get(i).getWeight() + dynamicProfit[j]);
                     break;
                 }
             }
         }
         printMaxProfit();
-        scheduleJobs(INPUT_JOBS.size()-1);
+        scheduleJobs(getInputJobs().size()-1);
+        Collections.reverse(getSelectedJobs());
     }
 
-    private static void printMaxProfit(){
+    private void printMaxProfit(){
         double maxProfit = dynamicProfit[0];
         for (int i=1; i <dynamicProfit.length; i++){
             if (dynamicProfit[i]> maxProfit){
@@ -76,18 +54,16 @@ public class LambdaWeightedScheduler implements Iterable<LambdaWeightedScheduler
         }
         System.out.println("Maximized Profit ="+ maxProfit);
     }
-    private static boolean isCompatible(LambdaWeightedScheduler i, LambdaWeightedScheduler j){
-        return (!(i.getStartTime().isBefore(j.getEndTime())));
-    }
-    private static void scheduleJobs(int j){
+
+    private void scheduleJobs(int j){
         if(j==0) {
-            if (isCompatible(SELECTED_JOBS.get(SELECTED_JOBS.size()-1), INPUT_JOBS.get(0))) {
-                SELECTED_JOBS.add(INPUT_JOBS.get(j));
+            if (getSelectedJobs().get(getSelectedJobs().size()-1).isCompatibleTo(getInputJobs().get(0))) {
+                getSelectedJobs().add(getInputJobs().get(j));
             }
                 return;
         }
-        if (INPUT_JOBS.get(j).getWeight() + dynamicProfit[previousCompatibleJob[j]] > dynamicProfit[j-1]) {
-            SELECTED_JOBS.add(INPUT_JOBS.get(j));
+        if (getInputJobs().get(j).getWeight() + dynamicProfit[previousCompatibleJob[j]] > dynamicProfit[j-1]) {
+            getSelectedJobs().add(getInputJobs().get(j));
             scheduleJobs(previousCompatibleJob[j]);
         }
         else
@@ -95,29 +71,11 @@ public class LambdaWeightedScheduler implements Iterable<LambdaWeightedScheduler
     }
 
 
-    public static void runScheduledJobs(){
-        //jobs run and completed on cluster
-        SELECTED_JOBS.clear();
-    }
-
-    public static List<LambdaWeightedScheduler> getPendingJobs(){
-        List<LambdaWeightedScheduler> pendingJobs = INPUT_JOBS;
-        pendingJobs.removeAll(SELECTED_JOBS);
-        return pendingJobs;
-    }
-
-    public static List<LambdaWeightedScheduler> getScheduledJobs(){
-        return SELECTED_JOBS;
-    }
-
-    public static void printScheduledJobs(){
-        for(LambdaWeightedScheduler element: SELECTED_JOBS){
+    @Override
+    public void printScheduledJobs(){
+        for(WeightedJob element: getSelectedJobs()){
             System.out.printf("%s,%s,%f%n",element.getStartTime(), element.getEndTime(), element.getWeight());
         }
     }
 
-    @Override
-    public Iterator<LambdaWeightedScheduler> iterator() {
-        return SELECTED_JOBS.listIterator();
-    }
 }
